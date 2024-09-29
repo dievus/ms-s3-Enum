@@ -33,7 +33,6 @@ def main_func():
                         file_path = os.path.join(directory_name, key)
                         os.makedirs(os.path.dirname(file_path), exist_ok=True)
                         with open(file_path, 'wb') as file:
-                            # 1 KiB chunks
                             for data in file_response.iter_content(1024):
                                 file.write(data)
                         print(f'Downloaded: {file_path}')
@@ -42,7 +41,6 @@ def main_func():
                 else:
                     print(
                         f'Failed to download {key}: {file_response.status_code}')
-
 
 if __name__ == "__main__":
     banner()
