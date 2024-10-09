@@ -12,9 +12,10 @@ def banner():
     print('Public S3 File Downloader')
     print('Another tool by Mr Mayor\n')
 
+
 def arg_handler():
     opt_parser = argparse.ArgumentParser(formatter_class=argparse.RawDescriptionHelpFormatter, epilog=textwrap.dedent(
-        '''python3 mss3enum.py -b bucket.s3.amazonaws.com -a'''))
+        '''python3 mss3enum.py '''))
     opt_parser_target = opt_parser.add_argument_group('Target S3 Bucket')
     opt_parser_target.add_argument(
         '-b', '--bucket', help='Sets the S3 bucket name to enumerate.', required=True)
@@ -47,34 +48,86 @@ def main_func():
     response = requests.get(url)
     xml_content = response.text
     prefixes = re.findall(r'<Prefix>(.*?)</Prefix>', xml_content)
-
+    print('Directories discovered:')
     for prefix in prefixes:
-        new_url = f"https://{args.bucket}?list-type=2&prefix={prefix}&delimiter=%2F&encoding-type=url"
-        response = requests.get(new_url)
-        print(f'\nUpdated URL: {new_url}')
-        print('Open Files:\n' + '-' * 60)
-        keys = re.findall(r'<Key>(.*?)</Key>', response.text)
-        if keys:
-            for key in keys:
-                download_url = f'https://{args.bucket}/{key}'
-                print(f'Downloading: {download_url}')
-                file_response = requests.get(download_url, stream=True)
-                if file_response.status_code == 200:
-                    if not key.endswith('/'):
-                        file_path = os.path.join(directory_name, key)
-                        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-                        with open(file_path, 'wb') as file:
-                            for data in file_response.iter_content(1024):
-                                file.write(data)
-                        print(f'Downloaded: {file_path}')
-                        file_number += 1
-                    else:
-                        print(f'Skipped directory key: {key}')
-                else:
-                    print(
-                        f'Failed to download {key}: {file_response.status_code}')
+        if prefix == '':
+            print('/')
+        else:
+            print(prefix)
+    for prefix in prefixes:
+        if prefix == '':
+            print(f'\nChecking / directory for accessible files')
+            print('-'*60)
+            new_url = f"https://{args.bucket}?list-type=2&prefix={prefix}&delimiter=%2F&encoding-type=url"
+            response = requests.get(new_url)
+            error_message = re.findall(
+                r'<Message>(.*?)</Message>', response.text)
+            if error_message:
+                for error in error_message:
+                    print(f'{prefix} - {error}\n')
+                    pass
+            else:
+                keys = re.findall(r'<Key>(.*?)</Key>', response.text)
+                for key in keys:
+                    print(f'File Discovered - {key}')
+                if keys:
+                    for key in keys:
+                        download_url = f'https://{args.bucket}/{key}'
+                        print(f'Downloading: {key}')
+                        file_response = requests.get(download_url, stream=True)
+                        if file_response.status_code == 200:
+                            if not key.endswith('/'):
+                                file_path = os.path.join(directory_name, key)
+                                os.makedirs(os.path.dirname(
+                                    file_path), exist_ok=True)
+                                with open(file_path, 'wb') as file:
+                                    for data in file_response.iter_content(1024):
+                                        file.write(data)
+                                print(f'Downloaded: {key}')
+
+                                file_number += 1
+                            else:
+                                pass
+                        else:
+                            pass
+                    print('\n')
+        else:
+            print(f'Checking {prefix} directory for accessible files')
+            print('-'*60)
+            new_url = f"https://{args.bucket}?list-type=2&prefix={prefix}&delimiter=%2F&encoding-type=url"
+            response = requests.get(new_url)
+            error_message = re.findall(
+                r'<Message>(.*?)</Message>', response.text)
+            if error_message:
+                for error in error_message:
+                    print(f'{prefix} - {error}\n')
+                    pass
+            else:
+                keys = re.findall(r'<Key>(.*?)</Key>', response.text)
+                for key in keys:
+                    print(f'File Discovered - {key}')
+                if keys:
+                    for key in keys:
+                        download_url = f'https://{args.bucket}/{key}'
+                        print(f'Downloading: {key}')
+                        file_response = requests.get(download_url, stream=True)
+                        if file_response.status_code == 200:
+                            if not key.endswith('/'):
+                                file_path = os.path.join(directory_name, key)
+                                os.makedirs(os.path.dirname(
+                                    file_path), exist_ok=True)
+                                with open(file_path, 'wb') as file:
+                                    for data in file_response.iter_content(1024):
+                                        file.write(data)
+                                print(f'Downloaded: {key}')
+                                file_number += 1
+                            else:
+                                pass
+                        else:
+                            pass
+                    print('\n')
     print(
-        f'\nDownloading complete. {file_number} files downloaded to the {directory_name} directory.')
+        f'Downloading complete. {file_number} files downloaded to the {directory_name} directory.')
 
 
 if __name__ == "__main__":
