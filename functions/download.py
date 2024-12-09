@@ -2,9 +2,9 @@ import os
 import requests
 
 
-def unauth_download_func1(key, file_number, directory_name, args):
+def unauth_download_func1(key, file_number, directory_name, args, bucket):
     file_number = file_number
-    download_url = f"https://{args.bucket}/{key}"
+    download_url = f"https://{bucket}/{key}"
     print(f"[info] Downloading: {key}")
     file_response = requests.get(download_url, stream=True, verify=False)
     if file_response.status_code == 200:
@@ -24,9 +24,9 @@ def unauth_download_func1(key, file_number, directory_name, args):
     return file_number
 
 
-def unauth_download_func2(key, file_number, directory_name, args):
+def unauth_download_func2(key, file_number, directory_name, args, bucket):
     file_number = file_number
-    download_url = f"https://{args.bucket}/{key}"
+    download_url = f"https://{bucket}/{key}"
     file_response = requests.get(download_url, stream=True, verify=False)
     if file_response.status_code == 200:
         if not key.endswith("/"):
@@ -43,11 +43,12 @@ def unauth_download_func2(key, file_number, directory_name, args):
     return file_number
 
 
-def bucket_handler(directory_name, s3_client, file_number, file_val, session, args):
-    s3_response = s3_client.list_objects_v2(Bucket=args.bucket, Delimiter="/")
+def bucket_handler(directory_name, s3_client, file_number, file_val, session, bucket):
+    s3_response = s3_client.list_objects_v2(Bucket=bucket, Delimiter="/")
+    # print(s3_response)
     if "CommonPrefixes" in s3_response:
         prefixes = [prefix["Prefix"] for prefix in s3_response["CommonPrefixes"]]
-        print("Directories discovered:")
+        print(f"Directories discovered for {bucket}:")
         print("-" * 80)
         for prefix in prefixes:
             if prefix == "":
@@ -59,7 +60,7 @@ def bucket_handler(directory_name, s3_client, file_number, file_val, session, ar
             print(f"\nChecking {prefix} directory for accessible files")
             print("-" * 80)
             subfolder_response = s3_client.list_objects_v2(
-                Bucket=args.bucket, Prefix=prefix
+                Bucket=bucket, Prefix=prefix
             )
             if "Contents" in subfolder_response:
                 keys = [content["Key"] for content in subfolder_response["Contents"]]
@@ -67,13 +68,19 @@ def bucket_handler(directory_name, s3_client, file_number, file_val, session, ar
                     for key in keys:
                         if key == prefix:
                             pass
+                        # if "CloudTrail-Digest" in key:
+                        #     pass
                         else:
                             print(f"[info] File Discovered - {key}")
                     for key in keys:
+                        # if "CloudTrail-Digest" in key:
+                        #     # file_number -= 1
+                        #     pass
+                    # else:
                         try:
                             file_val = 0
                             version_response = s3_client.list_object_versions(
-                                Bucket=args.bucket, Prefix=key
+                                Bucket=bucket, Prefix=key
                             )
                             if "Versions" in version_response:
                                 for version in version_response["Versions"]:
@@ -93,7 +100,7 @@ def bucket_handler(directory_name, s3_client, file_number, file_val, session, ar
                                             )
                                             with open(file_path, "wb") as file:
                                                 s3_client.download_fileobj(
-                                                    args.bucket, latest_id, file
+                                                    bucket, latest_id, file
                                                 )
                                             print(f"[info] Downloaded: {latest_id}")
                                             file_number += 1
@@ -140,7 +147,7 @@ def bucket_handler(directory_name, s3_client, file_number, file_val, session, ar
                                                     exist_ok=True,
                                                 )
                                             version_response = s3_client.get_object(
-                                                Bucket=args.bucket,
+                                                Bucket=bucket,
                                                 Key=latest_id,
                                                 VersionId=version_id,
                                             )
@@ -176,7 +183,7 @@ def bucket_handler(directory_name, s3_client, file_number, file_val, session, ar
                                                     latest_id = str(latest_id)
                                                     version_response = (
                                                         s3_client.list_object_versions(
-                                                            Bucket=args.bucket,
+                                                            Bucket=bucket,
                                                             Prefix=key,
                                                         )
                                                     )
@@ -193,7 +200,7 @@ def bucket_handler(directory_name, s3_client, file_number, file_val, session, ar
                                                         )
                                                         version_response = (
                                                             s3_client.get_object(
-                                                                Bucket=args.bucket,
+                                                                Bucket=bucket,
                                                                 Key=latest_id,
                                                                 VersionId=version_id,
                                                             )
@@ -215,28 +222,27 @@ def bucket_handler(directory_name, s3_client, file_number, file_val, session, ar
                         except Exception as e:
                             print(f"[error]Error downloading {key}: {e}")
         print(
-            f"\n[info] Downloading complete. {file_number} files downloaded to the {directory_name} directory."
+            f"\n[info] Downloading complete. {file_number} file(s) downloaded to the {directory_name} directory.\n"
         )
     elif "CommonPrefixes" not in s3_response:
-        print("No prefixes (directories) identified. Downloading files directly.")
-        print("-" * 80 + "\n")
-        response = s3_client.list_objects_v2(Bucket=args.bucket)
-        # print(response)
+        print(f"No prefixes (directories) identified for {bucket}. Downloading files directly.")
+        print("-" * 80)
+        response = s3_client.list_objects_v2(Bucket=bucket)
         if "Contents" in response:
             for obj in response["Contents"]:
                 key = obj["Key"]
                 # List versions for the current object
                 try:
                     version_response = s3_client.list_object_versions(
-                        Bucket=args.bucket, Prefix=key
+                        Bucket=bucket, Prefix=key
                     )
                     if "Versions" in version_response:
                         for version in version_response["Versions"]:
                             print(
-                                f"  Version ID: {version['VersionId']}, IsLatest: {version['IsLatest']}, LastModified: {version['LastModified']}"
+                                f"Version ID: {version['VersionId']}, IsLatest: {version['IsLatest']}, LastModified: {version['LastModified']}"
                             )
                     else:
-                        print("  No versions found for this object.")
+                        print("No versions found for this object.")
                 except Exception:
                     pass
                 print(f"[info] Downloading: {key}")
@@ -247,8 +253,11 @@ def bucket_handler(directory_name, s3_client, file_number, file_val, session, ar
                     exist_ok=True,
                 )
                 with open(file_path, "wb") as file:
-                    s3_client.download_fileobj(args.bucket, key, file)
+                    s3_client.download_fileobj(bucket, key, file)
                 print(f"[info] Downloaded: {key}")
                 file_number += 1
+        print(
+            f"\n[info] Downloading complete. {file_number} file(s) downloaded to the {directory_name} directory.\n"
+        )
     else:
         print("No keys to process.")

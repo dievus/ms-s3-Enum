@@ -1,6 +1,3 @@
-import argparse
-import textwrap
-import sys
 import urllib3
 from functions.args import arg_handler
 from functions.auth import auth_func
@@ -66,17 +63,34 @@ if __name__ == "__main__":
     global args
     banner()
     args = arg_handler()
-    if args.accesskey and args.secretkey:
-        if args.recursive:
-            print(f"Initiating authenticated, recursive enumeration of {args.bucket}")
-        else:
-            print(f"Initiating authenticated enumeration of {args.bucket}")
-        print("-" * 125)
-        auth_func(args)
+    bucket = ""
+    if args.bucket:
+        bucket = args.bucket
     else:
-        if args.recursive:
-            print(f"Initiating unauthenticated, recursive enumeration of {args.bucket}")
+        bucket = bucket
+    if args.accesskey and args.secretkey:
+        if args.recursive and bucket:
+            print(f"Initiating authenticated, recursive enumeration of {bucket}")
+            print("-" * 125)
+            auth_func(args, bucket)
+        elif bucket:
+            print(f"Initiating authenticated enumeration of {bucket}")
+            print("-" * 125)
+            auth_func(args, bucket)
         else:
-            print(f"Initiating unauthenticated enumeration of {args.bucket}")
-        print("-" * 125)
-        unauth_func(args)
+            print(f"Initiating authenticated enumeration of available information.")
+            print("-" * 125)
+            auth_func(args, bucket)            
+    else:
+        if args.recursive and bucket:
+            print(f"Initiating unauthenticated, recursive enumeration of {bucket}")
+            print("-" * 125)
+            unauth_func(args, bucket)
+        elif bucket:
+            print(f"Initiating unauthenticated enumeration of {bucket}")
+            print("-" * 125)
+            unauth_func(args, bucket)
+        else:
+            print(f"Initiating unauthenticated enumeration of available information.")    
+            print("-" * 125)
+            unauth_func(args, bucket)

@@ -4,22 +4,22 @@ import re
 from .download import unauth_download_func1, unauth_download_func2
 
 
-def unauth_func(args):
-    directory_name = args.bucket
+def unauth_func(args, bucket):
+    directory_name = bucket
     prefix = ""
     if args.recursive:
-        url = f"https://{args.bucket}?list-type=2&prefix=&encoding-type=url"
-        new_url = f"https://{args.bucket}?list-type=2&prefix={prefix}&encoding-type=url"
+        url = f"https://{bucket}?list-type=2&prefix=&encoding-type=url"
+        new_url = f"https://{bucket}?list-type=2&prefix={prefix}&encoding-type=url"
     else:
         url = (
-            f"https://{args.bucket}?list-type=2&prefix=&delimiter=%2F&encoding-type=url"
+            f"https://{bucket}?list-type=2&prefix=&delimiter=%2F&encoding-type=url"
         )
-        new_url = f"https://{args.bucket}?list-type=2&prefix={prefix}&delimiter=%2F&encoding-type=url"
+        new_url = f"https://{bucket}?list-type=2&prefix={prefix}&delimiter=%2F&encoding-type=url"
     file_number = 0
     try:
         response = requests.get(url, verify=False)
         if response.status_code == 200:
-            verify_url = f"https://{args.bucket}"
+            verify_url = f"https://{bucket}"
             verify_response = requests.head(verify_url, verify=False)
             for header, value in verify_response.headers.items():
                 if "x-amz-bucket-region" in header:
@@ -60,7 +60,7 @@ def unauth_func(args):
                 else:
                     print(f"Checking {prefix} directory for accessible files")
                     print("-" * 80)
-                    new_url = f"https://{args.bucket}?list-type=2&prefix={prefix}&delimiter=%2F&encoding-type=url"
+                    new_url = f"https://{bucket}?list-type=2&prefix={prefix}&delimiter=%2F&encoding-type=url"
                     response = requests.get(new_url, verify=False)
                     error_message = re.findall(
                         r"<Message>(.*?)</Message>", response.text
@@ -86,7 +86,7 @@ def unauth_func(args):
                     f"Recommend using the -rc flag to check for recursivity in the bucket."
                 )
         elif response.status_code == 403:
-            verify_url = f"https://{args.bucket}"
+            verify_url = f"https://{bucket}"
             verify_response = requests.head(verify_url, verify=False)
             for header, value in verify_response.headers.items():
                 if "x-amz-bucket-region" in header:
