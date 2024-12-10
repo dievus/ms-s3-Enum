@@ -9,4 +9,4 @@
 
 ## To Do ##
 - [X] Add authentication headers for AWS Access and Secret Keys
-- [ ] Add option to download from buckets when the bucket argument is not utilized in the initial command
+- [X] Add option to download from buckets when the bucket argument is not utilized in the initial command
