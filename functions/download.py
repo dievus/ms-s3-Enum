@@ -1,263 +1,603 @@
 import os
+
 import requests
+
+import re
+
 
 
 def unauth_download_func1(key, file_number, directory_name, args, bucket):
+
     file_number = file_number
+
     download_url = f"https://{bucket}/{key}"
+
     print(f"[info] Downloading: {key}")
+
     file_response = requests.get(download_url, stream=True, verify=False)
+
     if file_response.status_code == 200:
+
         if not key.endswith("/"):
+
             print(f"[info] Downloading: {key}")
+
             file_path = os.path.join(directory_name, key)
+
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
             with open(file_path, "wb") as file:
+
                 for data in file_response.iter_content(1024):
+
                     file.write(data)
+
             print(f"[info] Downloaded: {key}")
+
             file_number += 1
+
         else:
+
             pass
+
     else:
+
         pass
+
     return file_number
+
+
+
 
 
 def unauth_download_func2(key, file_number, directory_name, args, bucket):
+
     file_number = file_number
+
     download_url = f"https://{bucket}/{key}"
+
     file_response = requests.get(download_url, stream=True, verify=False)
+
     if file_response.status_code == 200:
+
         if not key.endswith("/"):
+
             print(f"[info] Downloading: {key}")
+
             file_path = os.path.join(directory_name, key)
+
             os.makedirs(os.path.dirname(file_path), exist_ok=True)
+
             with open(file_path, "wb") as file:
+
                 for data in file_response.iter_content(1024):
+
                     file.write(data)
+
             print(f"[info] Downloaded: {key}")
+
             file_number += 1
+
     else:
+
         pass
+
     return file_number
 
 
+
+
+
 def bucket_handler(directory_name, s3_client, file_number, file_val, session, bucket):
+
+    processed_values = []
+
+    keys_to_find = ['access_key_id', 'accesskeyid', 'secretaccesskey', 'secret_access_key', 'session_token', 'sessiontoken', 'aws_access_key_id', 'aws_secret_access_key', 'AKIA', 'ASIA', 'username', 'password', 'USERNAME', 'PASSWORD']
+
     s3_response = s3_client.list_objects_v2(Bucket=bucket, Delimiter="/")
+
     # print(s3_response)
+
     if "CommonPrefixes" in s3_response:
+
         prefixes = [prefix["Prefix"] for prefix in s3_response["CommonPrefixes"]]
+
         print(f"Directories discovered for {bucket}:")
+
         print("-" * 80)
+
         for prefix in prefixes:
+
             if prefix == "":
+
                 print("/")
+
                 prefix == "/"
+
             else:
+
                 print(prefix)
+
         for prefix in prefixes:
+
             print(f"\nChecking {prefix} directory for accessible files")
+
             print("-" * 80)
+
             subfolder_response = s3_client.list_objects_v2(
+
                 Bucket=bucket, Prefix=prefix
+
             )
+
             if "Contents" in subfolder_response:
+
                 keys = [content["Key"] for content in subfolder_response["Contents"]]
+
                 if keys:
+
                     for key in keys:
+
                         if key == prefix:
+
                             pass
+
                         # if "CloudTrail-Digest" in key:
+
                         #     pass
+
                         else:
+
                             print(f"[info] File Discovered - {key}")
+
                     for key in keys:
+
                         # if "CloudTrail-Digest" in key:
+
                         #     # file_number -= 1
+
                         #     pass
+
                     # else:
+
                         try:
+
                             file_val = 0
+
                             version_response = s3_client.list_object_versions(
+
                                 Bucket=bucket, Prefix=key
+
                             )
+
                             if "Versions" in version_response:
+
                                 for version in version_response["Versions"]:
+
                                     version_id = version.get("VersionId", "null")
+
                                     latest_id = version.get("Key")
+
                                     is_latest_val = version.get("IsLatest", "True")
+
                                     if version_id == "null":
-                                        print(f"[info] Downloading: {latest_id}")
-                                        if not latest_id.endswith("/"):
-                                            file_path = os.path.join(
-                                                directory_name,
-                                                latest_id.replace("/", os.sep),
-                                            )
-                                            os.makedirs(
-                                                os.path.dirname(file_path),
-                                                exist_ok=True,
-                                            )
-                                            with open(file_path, "wb") as file:
-                                                s3_client.download_fileobj(
-                                                    bucket, latest_id, file
-                                                )
-                                            print(f"[info] Downloaded: {latest_id}")
-                                            file_number += 1
-                                    elif version_id != "null":
-                                        last_modified = version["LastModified"]
-                                        last_modified_str = last_modified.strftime(
-                                            "%Y-%m-%d %H:%M:%S"
-                                        )
-                                        if not key.endswith("/"):
-                                            if file_val == 0:
-                                                print(
-                                                    f"[info] {latest_id} file identified with multiple versions available."
-                                                )
-                                                file_val = 1
-                                            base_name = os.path.basename(latest_id)
-                                            file_name_with_version = (
-                                                f"{base_name}_version_{version_id}"
-                                            )
-                                            directory_path = os.path.dirname(latest_id)
-                                            if is_latest_val:
-                                                print(
-                                                    f"[info] Downloading {latest_id} - Latest Version"
-                                                )
-                                                file_path = os.path.join(
-                                                    directory_name,
-                                                    key.replace("/", os.sep),
-                                                )
-                                                os.makedirs(
-                                                    os.path.dirname(file_path),
-                                                    exist_ok=True,
-                                                )
-                                            else:
-                                                print(
-                                                    f"[info] Downloading {latest_id} file with version ID: {version_id} - Last Modified: {last_modified_str}"
-                                                )
-                                                file_path = os.path.join(
-                                                    directory_name,
-                                                    directory_path,
-                                                    file_name_with_version,
-                                                )
-                                                # Ensure the directory structure exists
-                                                os.makedirs(
-                                                    os.path.dirname(file_path),
-                                                    exist_ok=True,
-                                                )
-                                            version_response = s3_client.get_object(
-                                                Bucket=bucket,
-                                                Key=latest_id,
-                                                VersionId=version_id,
-                                            )
-                                            file_content = version_response[
-                                                "Body"
-                                            ].read()
-                                            with open(file_path, "wb") as file:
-                                                file.write(file_content)
-                                            if is_latest_val:
-                                                print(f"[info] Downloaded: {key}")
-                                            else:
-                                                print(
-                                                    f"[info] Downloaded: {key} saved as {file_name_with_version}"
-                                                )
-                                            file_number += 1
+
+                                        if latest_id in processed_values:
+
+                                            pass
+
                                         else:
-                                            s3_client = session.client(
-                                                "s3"
-                                            )  # Modified as a signed request is likely required to access deleted files
-                                            if key.endswith("/"):
-                                                if key == latest_id:
-                                                    pass
+
+                                            print(f"[info] Downloading: {latest_id}")
+
+                                            if not latest_id.endswith("/"):
+
+                                                file_path = os.path.join(
+
+                                                    directory_name,
+
+                                                    latest_id.replace("/", os.sep),
+
+                                                )
+
+                                                os.makedirs(
+
+                                                    os.path.dirname(file_path),
+
+                                                    exist_ok=True,
+
+                                                )
+
+                                                with open(file_path, "wb") as file:
+
+                                                    s3_client.download_fileobj(
+
+                                                        bucket, latest_id, file
+
+                                                    )
+
+                                                print(f"[info] Downloaded: {latest_id}")
+
+                                                file_number += 1
+
+                                                with open(file_path, "r", errors='ignore') as file_check:
+
+                                                    content = file_check.readlines()
+
+                                                    for line_number, line in enumerate(content, start=1):
+
+                                                        for string_val in keys_to_find:
+
+                                                            if string_val in line.lower():
+
+                                                                print(f"Line: {line_number} - {line}")
+
+                                                processed_values.append(latest_id)
+
+                                    elif version_id != "null":
+
+                                        if latest_id in processed_values:
+
+                                            pass
+
+                                        else:
+
+                                            last_modified = version["LastModified"]
+
+                                            last_modified_str = last_modified.strftime(
+
+                                                "%Y-%m-%d %H:%M:%S"
+
+                                            )
+
+                                            if not key.endswith("/"):
+
+                                                if file_val == 0:
+
+                                                    print(
+
+                                                        f"[info] {latest_id} file identified with multiple versions available."
+
+                                                    )
+
+                                                    file_val = 1
+
+                                                base_name = os.path.basename(latest_id)
+
+                                                file_name_with_version = (
+
+                                                    f"{base_name}_version_{version_id}"
+
+                                                )
+
+                                                directory_path = os.path.dirname(latest_id)
+
+                                                if is_latest_val:
+
+                                                    print(
+
+                                                        f"[info] Downloading {latest_id} - Latest Version"
+
+                                                    )
+
+                                                    file_path = os.path.join(
+
+                                                        directory_name,
+
+                                                        key.replace("/", os.sep),
+
+                                                    )
+
+                                                    os.makedirs(
+
+                                                        os.path.dirname(file_path),
+
+                                                        exist_ok=True,
+
+                                                    )
+
                                                 else:
+
                                                     print(
-                                                        f"[info] {latest_id} file identified which may have been previously deleted"
+
+                                                        f"[info] Downloading {latest_id} file with version ID: {version_id} - Last Modified: {last_modified_str}"
+
                                                     )
+
+                                                    file_path = os.path.join(
+
+                                                        directory_name,
+
+                                                        directory_path,
+
+                                                        file_name_with_version,
+
+                                                    )
+
+                                                    # Ensure the directory structure exists
+
+                                                    os.makedirs(
+
+                                                        os.path.dirname(file_path),
+
+                                                        exist_ok=True,
+
+                                                    )
+
+                                                version_response = s3_client.get_object(
+
+                                                    Bucket=bucket,
+
+                                                    Key=latest_id,
+
+                                                    VersionId=version_id,
+
+                                                )
+
+                                                file_content = version_response[
+
+                                                    "Body"
+
+                                                ].read()
+
+                                                with open(file_path, "wb") as file:
+
+                                                    file.write(file_content)
+
+                                                if is_latest_val:
+
+                                                    print(f"[info] Downloaded: {key}")
+
+                                                else:
+
                                                     print(
-                                                        f"[info] Downloading {latest_id}\n[info] Version ID: {version_id}\n[info]Last Modified: {last_modified_str}"
+
+                                                        f"[info] Downloaded: {key} saved as {file_name_with_version}"
+
                                                     )
-                                                    directory_path = os.path.dirname(
-                                                        latest_id
-                                                    )
-                                                    latest_id = str(latest_id)
-                                                    version_response = (
-                                                        s3_client.list_object_versions(
-                                                            Bucket=bucket,
-                                                            Prefix=key,
+
+                                                file_number += 1
+
+                                                with open(file_path, "r", errors='ignore') as file_check:
+
+                                                    content = file_check.readlines()
+
+                                                    for line_number, line in enumerate(content, start=1):
+
+                                                        for string_val in keys_to_find:
+
+                                                            if string_val in line.lower():
+
+                                                                print(f"Line: {line_number} - {line}")
+
+                                            else:
+
+                                                s3_client = session.client(
+
+                                                    "s3"
+
+                                                )  # Modified as a signed request is likely required to access deleted files
+
+                                                if key.endswith("/"):
+
+                                                    if key == latest_id:
+
+                                                        pass
+
+                                                    else:
+
+                                                        print(
+
+                                                            f"[info] {latest_id} file identified which may have been previously deleted"
+
                                                         )
-                                                    )
-                                                    try:
-                                                        file_path = os.path.join(
-                                                            directory_name,
-                                                            latest_id.replace(
-                                                                "/", os.sep
-                                                            ),
+
+                                                        print(
+
+                                                            f"[info] Downloading {latest_id}\n[info] Version ID: {version_id}\n[info]Last Modified: {last_modified_str}"
+
                                                         )
-                                                        os.makedirs(
-                                                            os.path.dirname(file_path),
-                                                            exist_ok=True,
+
+                                                        directory_path = os.path.dirname(
+
+                                                            latest_id
+
                                                         )
+
+                                                        latest_id = str(latest_id)
+
                                                         version_response = (
-                                                            s3_client.get_object(
+
+                                                            s3_client.list_object_versions(
+
                                                                 Bucket=bucket,
-                                                                Key=latest_id,
-                                                                VersionId=version_id,
+
+                                                                Prefix=key,
+
                                                             )
+
                                                         )
-                                                        file_content = version_response[
-                                                            "Body"
-                                                        ].read()
-                                                        with open(
-                                                            file_path, "wb"
-                                                        ) as file:
-                                                            file.write(file_content)
-                                                            print(
-                                                                f"[info] Downloaded: {latest_id}"
+
+                                                        try:
+
+                                                            file_path = os.path.join(
+
+                                                                directory_name,
+
+                                                                latest_id.replace(
+
+                                                                    "/", os.sep
+
+                                                                ),
+
                                                             )
-                                                            file_number += 1
-                                                    except Exception as e:
-                                                        continue
+
+                                                            os.makedirs(
+
+                                                                os.path.dirname(file_path),
+
+                                                                exist_ok=True,
+
+                                                            )
+
+                                                            version_response = (
+
+                                                                s3_client.get_object(
+
+                                                                    Bucket=bucket,
+
+                                                                    Key=latest_id,
+
+                                                                    VersionId=version_id,
+
+                                                                )
+
+                                                            )
+
+                                                            file_content = version_response[
+
+                                                                "Body"
+
+                                                            ].read()
+
+                                                            with open(
+
+                                                                file_path, "wb"
+
+                                                            ) as file:
+
+                                                                file.write(file_content)
+
+                                                                print(
+
+                                                                    f"[info] Downloaded: {latest_id}"
+
+                                                                )
+
+                                                                file_number += 1
+
+                                                                with open(file_path, "r", errors='ignore') as file_check:
+
+                                                                    content = file_check.readlines()
+
+                                                                    for line_number, line in enumerate(content, start=1):
+
+                                                                        for string_val in keys_to_find:
+
+                                                                            if string_val in line.lower():
+
+                                                                                print(f"Line: {line_number} - {line}")
+
+                                                        except Exception as e:
+
+                                                            continue
+
+
 
                         except Exception as e:
+
                             print(f"[error]Error downloading {key}: {e}")
+
         print(
-            f"\n[info] Downloading complete. {file_number} file(s) downloaded to the {directory_name} directory.\n"
+
+            f"\n[info] Downloading complete. {file_number} file(s) downloaded to the {directory_name} directory."
+
         )
+
     elif "CommonPrefixes" not in s3_response:
-        print(f"No prefixes (directories) identified for {bucket}. Downloading files directly.")
+
+        print(f"\nNo prefixes (directories) identified for {bucket}. Downloading files directly.")
+
         print("-" * 80)
+
         response = s3_client.list_objects_v2(Bucket=bucket)
+
         if "Contents" in response:
+
             for obj in response["Contents"]:
+
                 key = obj["Key"]
+
                 # List versions for the current object
+
                 try:
+
                     version_response = s3_client.list_object_versions(
+
                         Bucket=bucket, Prefix=key
+
                     )
+
                     if "Versions" in version_response:
+
                         for version in version_response["Versions"]:
+
                             print(
+
                                 f"Version ID: {version['VersionId']}, IsLatest: {version['IsLatest']}, LastModified: {version['LastModified']}"
+
                             )
+
                     else:
+
                         print("No versions found for this object.")
+
                 except Exception:
+
                     pass
+
                 print(f"[info] Downloading: {key}")
+
                 # if not latest_id.endswith("/"):
+
                 file_path = os.path.join(directory_name, key.replace("/", os.sep))
+
                 os.makedirs(
+
                     os.path.dirname(file_path),
+
                     exist_ok=True,
+
                 )
+
                 with open(file_path, "wb") as file:
+
                     s3_client.download_fileobj(bucket, key, file)
+
                 print(f"[info] Downloaded: {key}")
+
                 file_number += 1
+
+                with open(file_path, "r", errors='ignore') as file_check:
+
+                    content = file_check.readlines()
+
+                    for line_number, line in enumerate(content, start=1):
+
+                        for string_val in keys_to_find:
+
+                            if string_val in line.lower():
+
+                                print(f"Line: {line_number} - {line.strip()}")
+
+                                if line_number < len(content):
+
+                                    next_line = content[line_number]
+
+                                    # for string_val_2 in keys_to_find:
+
+                                    #     if string_val_2 in next_line:
+
+                                    print(f"{next_line.strip()}")
+
+                                
+
         print(
+
             f"\n[info] Downloading complete. {file_number} file(s) downloaded to the {directory_name} directory.\n"
+
         )
+
     else:
+
         print("No keys to process.")

@@ -29,6 +29,9 @@ def arg_handler():
     )
     opt_parser_additional_options = opt_parser.add_argument_group("Additional Options")
     opt_parser_additional_options.add_argument(
+        "-l", "--list", help="Attempts to list buckets attributed to the included account", action="store_true"
+    )
+    opt_parser_additional_options.add_argument(
         "-rc", "--recursive", help="Scans the bucket recursively", action="store_true"
     )
     opt_parser_additional_options.add_argument(
@@ -37,6 +40,7 @@ def arg_handler():
     opt_parser_target.add_argument(
         "-r", "--region", help="Specifies the region to use."
     )
+    
 
     global args
     args = opt_parser.parse_args()

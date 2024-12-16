@@ -1,8 +1,10 @@
 import boto3.exceptions
 from botocore.exceptions import ClientError
 import os
-from .download import bucket_handler
-
+# from .download import bucket_handler
+from .download import *
+import traceback
+import re
 
 def bucket_versioning_func(s3_client, args, bucket):
     try:
@@ -12,29 +14,97 @@ def bucket_versioning_func(s3_client, args, bucket):
         pass
 
 
-def identity_call(sts_client, args):  # Queries and outputs information about the current account
+def identity_call(sts_client,iam_client, args):  # Queries and outputs information about the current account
     username = None
     arn = None
+    match = None
     # try:
-    identity = sts_client.get_caller_identity()
-    if identity:
-        print(f"\nSecurity Token Service (STS) information")
-        print("-" * 80)
-    userid = identity.get("UserId")
-    print(userid)
-    account = identity.get("Account")
-    arn = identity.get("Arn")
-    print(f"UserId: {userid}")
-    print(f"Account: {account}")
-    print(f"Arn: {identity.get('Arn')}")
-    username = arn.split("user/")[1]
-    print(f"Username: {username}")
-    return username, arn
-    # except Exception as e:
-    #     print(e)
-    #     print('here in exception')
-    #     return None, None
-
+    try:
+        print('\nAttempting to elicit user information through error messaging, which may be more OPSEC friendly.')
+        iam_client.get_user()
+    except ClientError as e:
+        error_message = str(e)
+        match = re.search(r"User: (arn:aws:iam::(\d+):user/([\w/-]+))", error_message)
+        if match:
+            print(f"\nUser Account Information via Verbose Error Messaging")
+            print("-" * 80)
+            full_arn = match.group(1)
+            aws_id = match.group(2)
+            username = match.group(3)
+            print(f"Arn: {full_arn}")
+            print(f"AWS ID: {aws_id}")
+            print(f"Username: {username}")
+            arn = full_arn
+        else:
+            print("User ARN not found in the error message.")
+        keep_going = input('\nDo you want to run the less OPSEC-safe STS get-caller-identity?(y/n)')
+        print(keep_going)
+        if keep_going.lower() == 'y':
+            identity = sts_client.get_caller_identity()
+            if identity:
+                print(f"\nSecurity Token Service (STS) information")
+                print("-" * 80)
+            userid = identity.get("UserId")
+            account = identity.get("Account")
+            arn = identity.get("Arn")
+            print(f"UserId: {userid}")
+            print(f"Account: {account}")
+            print(f"Arn: {identity.get('Arn')}")
+            # if 'user/' in arn:
+            #     username = arn.split("user/")[1]
+            #     print(f"Username: {username}")
+            # elif 'assumed-role/' in arn:
+            #     role_part = arn.split("assumed-role/")[1]
+            #     username = role_part.split("/")[1]
+            #     print(f"Username: {username}")
+            if "user/" in arn:
+                username = arn.split("user/")[1]
+            elif "assumed-role/" in arn:
+                # Extract role and session name for assumed roles
+                try:
+                    role_part = arn.split("assumed-role/")[1]
+                    username = role_part.split("/")[1]
+                except IndexError:
+                    username = "Invalid ARN format"
+            elif "role/" in arn:
+                # Extract role name for IAM roles
+                username = arn.split("role/")[1]
+            elif "federated-user/" in arn:
+                # Extract federated user name
+                username = arn.split("federated-user/")[1]
+            elif "instance/" in arn:
+                # Extract EC2 instance ID
+                username = arn.split("instance/")[1]
+            elif "lambda/" in arn:
+                # Extract Lambda function name
+                username = arn.split("function:")[1]
+            elif "s3://" in arn:
+                # Extract S3 bucket name
+                username = arn.split("s3:::")[1]
+            elif "sqs/" in arn:
+                # Extract SQS queue name
+                username = arn.split("queue/")[1]
+            elif "sns/" in arn:
+                # Extract SNS topic name
+                username = arn.split("topic/")[1]
+            elif "logs/" in arn:
+                # Extract CloudWatch log group name
+                username = arn.split("log-group:")[1]
+            elif "dynamodb/" in arn:
+                # Extract DynamoDB table name
+                username = arn.split("table/")[1]
+            else:
+                username = "Unknown"
+            print(f"Username/Resource: {username}")
+            try:
+                key_last_used = iam_client.get_access_key_last_used(AccessKeyId=args.accesskey)
+                if key_last_used:
+                    print(key_last_used)
+            except Exception as e:
+                pass
+        else:
+            pass
+        return username, arn
 
 def bucket_region_enum(directory_name, s3_client, file_number, file_val, session, args, arn, bucket):
     bucket_name_dict = []  # Queries and outputs information about the current bucket
@@ -59,40 +129,55 @@ def bucket_region_enum(directory_name, s3_client, file_number, file_val, session
             pass
     except Exception:
         pass
-    try:
-        bucket_policy = s3_client.get_bucket_policy(Bucket=bucket)
-        if bucket_policy:
-            print(f"\nAttempting to list buckets owned by {arn}")
-            print("-" * 80)
-            print(bucket_policy(["Policy"]))
-    except Exception:
-        pass
-    try:
-        list_bucket_vals = s3_client.list_buckets()
-        if list_bucket_vals:
-            print(f'\n{arn} appears to have privileges to list buckets.')
-            print(f"\nAttempting to list buckets owned by {arn}")
-            print("-" * 80)
-            # print(list_bucket_vals)
-            if "ResponseMetadata" in list_bucket_vals:
-                bucket_names = [bucket['Name'] for bucket in list_bucket_vals['Buckets']]
-                if bucket_names:
-                    print('\nBucket(s) found')
-                    print('-'*80)
-                    owner_name = list_bucket_vals['Owner']['DisplayName']
-                    for bucket_val in bucket_names:
-                        print(f'{bucket_val} - Owner: {owner_name}')
-                        bucket_name_dict.append(bucket_val)
-    except Exception:
-        pass
-    for bucket_val_to_download in bucket_name_dict:
-        download_file_val = input(f'\nDo you want to attempt to download files from {bucket_val_to_download}? (y/n) ')
-        if download_file_val.lower() == 'y':
-            directory_name = bucket_val_to_download
-            file_number = 0
+    if args.bucket:
+        try:
+            directory_name = args.bucket
+            bucket_val_to_download = args.bucket
             bucket_handler(directory_name, s3_client, file_number, file_val, session, bucket_val_to_download)
-        else:
+        except Exception as e:
+            print('Invalid privileges to list bucket contents. Continuing.')
             pass
+    if args.list:
+        try:
+            bucket_policy = s3_client.get_bucket_policy(Bucket=bucket)
+            if bucket_policy:
+                print(f"\nAttempting to list buckets owned by {arn}")
+                print("-" * 80)
+                print(bucket_policy(["Policy"]))
+        except Exception:
+            pass
+        try:
+            list_bucket_vals = s3_client.list_buckets()
+            if list_bucket_vals:
+                print(f'{arn} appears to have privileges to list buckets.')
+                print(f"\nAttempting to list buckets owned by {arn}")
+                print("-" * 80)
+                # print(list_bucket_vals)
+                if "ResponseMetadata" in list_bucket_vals:
+                    bucket_names = [bucket['Name'] for bucket in list_bucket_vals['Buckets']]
+                    if bucket_names:
+                        print('\nBucket(s) found')
+                        print('-'*80)
+                        owner_name = list_bucket_vals['Owner']['DisplayName']
+                        for bucket_val in bucket_names:
+                            print(f'{bucket_val} - Owner: {owner_name}')
+                            bucket_name_dict.append(bucket_val)
+                for bucket_val_to_download in bucket_name_dict:
+                    download_file_val = input(f'\nDo you want to attempt to download files from {bucket_val_to_download}? (y/n) ')
+                    if download_file_val.lower() == 'y':
+                        directory_name = bucket_val_to_download
+                        file_number = 0
+                        try:
+                            bucket_handler(directory_name, s3_client, file_number, file_val, session, bucket_val_to_download)
+                        except Exception as e:
+                            print('Invalid privileges to list bucket contents. Continuing.')
+                            pass
+                    else:
+                        pass
+        except Exception:
+            pass
+    else:
+        pass
 def iam_policy_check(iam_client, arn, username, args):  # Queries and outputs information about IAM policies
     policy_arn_values = []
     try:
@@ -189,7 +274,7 @@ def auth_func(args, bucket):
         s3_client = session.client("s3")
         sts_client = session.client("sts")
         iam_client = session.client("iam")
-        username, arn = identity_call(sts_client, args)
+        username, arn = identity_call(sts_client, iam_client, args)
         region = bucket_region_enum(directory_name, s3_client, file_number, file_val, session, args, arn, bucket)
         iam_policy_check(iam_client, arn, username, args)
         secrets_manager_check(iam_client, arn, region, args)

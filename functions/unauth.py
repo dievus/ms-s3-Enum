@@ -11,9 +11,7 @@ def unauth_func(args, bucket):
         url = f"https://{bucket}?list-type=2&prefix=&encoding-type=url"
         new_url = f"https://{bucket}?list-type=2&prefix={prefix}&encoding-type=url"
     else:
-        url = (
-            f"https://{bucket}?list-type=2&prefix=&delimiter=%2F&encoding-type=url"
-        )
+        url = f"https://{bucket}?list-type=2&prefix=&delimiter=%2F&encoding-type=url"
         new_url = f"https://{bucket}?list-type=2&prefix={prefix}&delimiter=%2F&encoding-type=url"
     file_number = 0
     try:
